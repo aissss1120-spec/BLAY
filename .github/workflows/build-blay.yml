@@ -14,7 +14,7 @@ jobs:
   build:
     name: Build BLAY 2.1 APK
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 25
 
     steps:
       - name: Checkout
@@ -26,44 +26,161 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Setup Gradle 8.9
+      - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.9"
 
-      - name: Check project
+      - name: Prepare BLAY source
         shell: bash
         run: |
           set -e
-          test -f settings.gradle.kts
-          test -f build.gradle.kts
-          test -f app/build.gradle.kts
-          test -f app/src/main/AndroidManifest.xml
-          echo "BLAY 2.1 source OK"
 
-      - name: Build APK
+          echo "================================"
+          echo "MENCARI PROJECT BLAY"
+          echo "================================"
+
+          if [ -f "settings.gradle.kts" ] && [ -f "app/build.gradle.kts" ]; then
+            echo "Project ditemukan di root."
+          else
+            ZIP=$(find . -maxdepth 2 -type f \
+              \( -name "*.zip" -o -name "*.ZIP" \) \
+              | grep -E "BLAY|blay" \
+              | head -n 1 || true)
+
+            if [ -z "$ZIP" ]; then
+              echo "ERROR: ZIP BLAY tidak ditemukan."
+              echo ""
+              echo "Isi repository:"
+              find . -maxdepth 3 -type f | sort
+              exit 1
+            fi
+
+            echo "ZIP ditemukan: $ZIP"
+
+            rm -rf .blay-source
+            mkdir -p .blay-source
+
+            unzip -q "$ZIP" -d .blay-source
+
+            SETTINGS=$(find .blay-source \
+              -type f \
+              -name "settings.gradle.kts" \
+              -print -quit)
+
+            if [ -z "$SETTINGS" ]; then
+              SETTINGS=$(find .blay-source \
+                -type f \
+                -name "settings.gradle" \
+                -print -quit)
+            fi
+
+            if [ -z "$SETTINGS" ]; then
+              echo "ERROR: settings.gradle(.kts) tidak ditemukan."
+              find .blay-source -type f | sort
+              exit 1
+            fi
+
+            PROJECT_ROOT=$(dirname "$SETTINGS")
+
+            echo "Project root:"
+            echo "$PROJECT_ROOT"
+
+            cp -a "$PROJECT_ROOT"/. .
+          fi
+
+          echo ""
+          echo "================================"
+          echo "FILE PROJECT"
+          echo "================================"
+
+          find . -maxdepth 4 -type f \
+            | grep -v ".git/" \
+            | sort
+
+      - name: Verify Android project
         shell: bash
         run: |
           set -e
-          gradle --no-daemon clean assembleDebug --stacktrace
+
+          echo "Checking BLAY..."
+
+          test -f "settings.gradle.kts" \
+            || test -f "settings.gradle"
+
+          test -f "build.gradle.kts" \
+            || test -f "build.gradle"
+
+          test -f "app/build.gradle.kts" \
+            || test -f "app/build.gradle"
+
+          test -f "app/src/main/AndroidManifest.xml"
+
+          echo ""
+          echo "BLAY PROJECT OK"
+
+      - name: Show Gradle version
+        shell: bash
+        run: |
+          gradle --version
+
+      - name: Clean
+        shell: bash
+        run: |
+          set -e
+          gradle clean --no-daemon --stacktrace
+
+      - name: Build BLAY APK
+        shell: bash
+        run: |
+          set -e
+
+          echo "================================"
+          echo "BUILD BLAY 2.1"
+          echo "================================"
+
+          gradle assembleDebug \
+            --no-daemon \
+            --stacktrace \
+            --warning-mode all
+
+      - name: Find APK
+        shell: bash
+        run: |
+          set -e
+
+          echo "APK hasil build:"
+
+          find app/build/outputs \
+            -type f \
+            \( -name "*.apk" -o -name "*.aab" \) \
+            -exec ls -lh {} \;
 
       - name: Verify APK
         shell: bash
         run: |
           set -e
+
           APK="app/build/outputs/apk/debug/app-debug.apk"
 
           if [ ! -f "$APK" ]; then
-            echo "APK tidak ditemukan!"
-            find app/build -type f | sort
+            echo "ERROR: APK tidak ditemukan!"
+
+            find app/build \
+              -type f \
+              | sort
+
             exit 1
           fi
 
-          echo "BLAY 2.1 APK berhasil:"
+          echo "================================"
+          echo "BLAY APK BERHASIL"
+          echo "================================"
+
           ls -lh "$APK"
           sha256sum "$APK"
 
-      - name: Upload BLAY 2.1 APK
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: BLAY-2.1-debug-apk
