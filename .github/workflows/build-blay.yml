@@ -24,34 +24,24 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Accept Android SDK licenses
+        run: yes | sdkmanager --licenses >/dev/null || true
 
-      - name: Install Android SDK
+      - name: Install Android SDK packages
         run: |
-          sdkmanager "platforms;android-36" \
-                     "build-tools;36.0.0"
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v5
+        uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '9.4.1'
-
-      - name: Make Gradle executable
-        run: chmod +x gradlew
+          gradle-version: '8.9'
 
       - name: Build BLAY Debug APK
-        run: ./gradlew assembleDebug --stacktrace
-
-      - name: Find APK
-        run: |
-          echo "APK hasil build:"
-          find . -type f -name "*.apk" -print
+        run: gradle assembleDebug --stacktrace
 
       - name: Upload BLAY APK
         uses: actions/upload-artifact@v4
         with:
           name: BLAY-v1.8-debug-apk
-          path: |
-            **/build/outputs/apk/debug/*.apk
+          path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
