@@ -24,12 +24,51 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      - name: Locate Android SDK
+        shell: bash
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
+
+          SDKMANAGER=$(find /usr/local/lib/android/sdk/cmdline-tools \
+            -type f \
+            -name sdkmanager \
+            2>/dev/null | head -n 1)
+
+          if [ -z "$SDKMANAGER" ]; then
+            echo "ERROR: sdkmanager tidak ditemukan"
+            find /usr/local/lib/android/sdk -maxdepth 4 -type f 2>/dev/null | head -100
+            exit 1
+          fi
+
+          SDKMANAGER_DIR=$(dirname "$SDKMANAGER")
+
+          echo "sdkmanager ditemukan:"
+          echo "$SDKMANAGER"
+
+          echo "$SDKMANAGER_DIR" >> "$GITHUB_PATH"
+          echo "/usr/local/lib/android/sdk/platform-tools" >> "$GITHUB_PATH"
+
+          echo "ANDROID_HOME=/usr/local/lib/android/sdk" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=/usr/local/lib/android/sdk" >> "$GITHUB_ENV"
+
+      - name: Check Android SDK
+        shell: bash
+        run: |
+          which sdkmanager
+          sdkmanager --version
+
       - name: Accept Android SDK licenses
-        run: yes | sdkmanager --licenses >/dev/null || true
+        shell: bash
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
 
       - name: Install Android SDK packages
+        shell: bash
         run: |
-          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+          sdkmanager \
+            "platforms;android-35" \
+            "build-tools;35.0.0"
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -37,7 +76,8 @@ jobs:
           gradle-version: '8.9'
 
       - name: Build BLAY Debug APK
-        run: gradle assembleDebug --stacktrace
+        run: |
+          gradle assembleDebug --stacktrace
 
       - name: Upload BLAY APK
         uses: actions/upload-artifact@v4
