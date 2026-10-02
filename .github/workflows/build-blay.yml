@@ -23,14 +23,14 @@ jobs:
     steps:
 
       # ==========================================
-      # CHECKOUT
+      # 1. CHECKOUT
       # ==========================================
       - name: Checkout repository
         uses: actions/checkout@v4
 
 
       # ==========================================
-      # JAVA 17
+      # 2. JAVA 17
       # ==========================================
       - name: Setup Java 17
         uses: actions/setup-java@v4
@@ -40,7 +40,7 @@ jobs:
 
 
       # ==========================================
-      # ANDROID SDK
+      # 3. ANDROID SDK
       # ==========================================
       - name: Verify Android SDK
         shell: bash
@@ -59,7 +59,7 @@ jobs:
 
 
       # ==========================================
-      # ANDROID PATH
+      # 4. ANDROID PATH
       # ==========================================
       - name: Configure Android PATH
         shell: bash
@@ -72,90 +72,151 @@ jobs:
 
 
       # ==========================================
-      # PREPARE BLAY SOURCE
+      # 5. PREPARE BLAY SOURCE
       # ==========================================
       - name: Prepare BLAY 2.0 source
         shell: bash
         run: |
           set -e
 
-          echo "Preparing BLAY source..."
+          echo "=========================================="
+          echo "Preparing BLAY 2.0 source"
+          echo "=========================================="
 
-          # Jika project Android sudah langsung ada di repository,
-          # gunakan langsung.
-          if [ -f "settings.gradle.kts" ] && [ -f "app/build.gradle.kts" ]; then
-            echo "BLAY Android project ditemukan langsung di repository."
-            exit 0
-          fi
+          # Jika project Android sudah langsung ada di repo
+          if [ -f "settings.gradle.kts" ] && \
+             [ -f "build.gradle.kts" ] && \
+             [ -f "app/build.gradle.kts" ]; then
 
-          # Jika source masih berupa ZIP, ekstrak.
-          ZIP="BLAY-2.0-complete.zip"
+            echo "Android project ditemukan langsung di repository."
 
-          if [ ! -f "$ZIP" ]; then
-            echo "ERROR: $ZIP tidak ditemukan."
+          else
+
+            ZIP="BLAY-2.0-complete.zip"
+
+            if [ ! -f "$ZIP" ]; then
+              echo "ERROR: $ZIP tidak ditemukan."
+              echo ""
+              echo "Isi repository:"
+              find . -maxdepth 3 -type f | sort
+              exit 1
+            fi
+
+            echo "ZIP ditemukan:"
+            ls -lh "$ZIP"
+
+            rm -rf .blay-source
+            mkdir -p .blay-source
+
+            unzip -q "$ZIP" -d .blay-source
+
             echo ""
-            echo "File repository:"
-            find . -maxdepth 3 -type f | sort
-            exit 1
+            echo "Isi ZIP:"
+            find .blay-source -type f | sort
+
+            SETTINGS_FILE=$(find .blay-source \
+              -type f \
+              -name "settings.gradle.kts" \
+              -print -quit)
+
+            if [ -z "$SETTINGS_FILE" ]; then
+              echo "ERROR: settings.gradle.kts tidak ditemukan."
+              exit 1
+            fi
+
+            PROJECT_ROOT=$(dirname "$SETTINGS_FILE")
+
+            echo ""
+            echo "BLAY project root:"
+            echo "$PROJECT_ROOT"
+
+            cp -a "$PROJECT_ROOT"/. .
+
           fi
 
-          echo "ZIP ditemukan:"
-          ls -lh "$ZIP"
-
-          rm -rf .blay-source
-          mkdir -p .blay-source
-
-          unzip -q "$ZIP" -d .blay-source
-
           echo ""
-          echo "Isi ZIP:"
-          find .blay-source -maxdepth 4 -type f | sort
-
-          SETTINGS_FILE=$(find .blay-source \
-            -type f \
-            -name "settings.gradle.kts" \
-            -print -quit)
-
-          if [ -z "$SETTINGS_FILE" ]; then
-            echo "ERROR: settings.gradle.kts tidak ditemukan."
-            exit 1
-          fi
-
-          PROJECT_ROOT=$(dirname "$SETTINGS_FILE")
-
-          echo ""
-          echo "BLAY project root:"
-          echo "$PROJECT_ROOT"
-
-          cp -a "$PROJECT_ROOT"/. .
-
-          echo ""
-          echo "BLAY source berhasil disiapkan."
+          echo "BLAY source siap."
 
 
       # ==========================================
-      # VERIFY PROJECT
+      # 6. FIX SOURCE JAVA
+      # ==========================================
+      - name: Fix BLAY Java source
+        shell: bash
+        run: |
+          set -e
+
+          FILE="app/src/main/java/com/blay/assistant/BlayStandbyService.java"
+
+          if [ ! -f "$FILE" ]; then
+            echo "ERROR: $FILE tidak ditemukan."
+            exit 1
+          fi
+
+          echo "Checking Java source..."
+
+          python3 <<'PY'
+          from pathlib import Path
+
+          path = Path(
+              "app/src/main/java/com/blay/assistant/BlayStandbyService.java"
+          )
+
+          data = path.read_text(encoding="utf-8")
+
+          # Perbaiki literal \n yang salah masuk sebagai teks.
+          data = data.replace(
+              "import android.view.*;\\nimport android.net.Uri;",
+              "import android.view.*;\nimport android.net.Uri;"
+          )
+
+          # Pastikan import Uri benar walaupun source sedikit berbeda.
+          if "import android.net.Uri;" not in data:
+              data = data.replace(
+                  "import android.view.*;",
+                  "import android.view.*;\nimport android.net.Uri;"
+              )
+
+          path.write_text(data, encoding="utf-8")
+          PY
+
+          echo ""
+          echo "Java imports setelah perbaikan:"
+          sed -n '1,20p' "$FILE"
+
+          echo ""
+          echo "Java source OK."
+
+
+      # ==========================================
+      # 7. VERIFY ANDROID PROJECT
       # ==========================================
       - name: Verify BLAY Android project
         shell: bash
         run: |
           set -e
 
-          echo "Checking BLAY project..."
+          echo "=========================================="
+          echo "Checking BLAY Android project"
+          echo "=========================================="
 
           test -f "settings.gradle.kts"
           test -f "build.gradle.kts"
           test -f "gradle.properties"
           test -f "app/build.gradle.kts"
           test -f "app/src/main/AndroidManifest.xml"
+          test -f "app/src/main/java/com/blay/assistant/MainActivity.java"
+          test -f "app/src/main/java/com/blay/assistant/BlayStandbyService.java"
 
           echo ""
           echo "Required files:"
-          echo "OK  settings.gradle.kts"
-          echo "OK  build.gradle.kts"
-          echo "OK  gradle.properties"
-          echo "OK  app/build.gradle.kts"
-          echo "OK  AndroidManifest.xml"
+          echo "OK settings.gradle.kts"
+          echo "OK build.gradle.kts"
+          echo "OK gradle.properties"
+          echo "OK app/build.gradle.kts"
+          echo "OK AndroidManifest.xml"
+          echo "OK MainActivity.java"
+          echo "OK BlayStandbyService.java"
 
           echo ""
           echo "Android source:"
@@ -163,7 +224,7 @@ jobs:
 
 
       # ==========================================
-      # SETUP GRADLE
+      # 8. SETUP GRADLE
       # ==========================================
       - name: Setup Gradle 8.9
         uses: gradle/actions/setup-gradle@v4
@@ -172,18 +233,32 @@ jobs:
 
 
       # ==========================================
-      # CHECK GRADLE
+      # 9. GRADLE VERSION
       # ==========================================
       - name: Check Gradle
         shell: bash
         run: |
           set -e
 
+          echo "Gradle version:"
           gradle --version
 
 
       # ==========================================
-      # BUILD BLAY
+      # 10. CLEAN BUILD
+      # ==========================================
+      - name: Clean previous build
+        shell: bash
+        run: |
+          set -e
+
+          gradle clean \
+            --no-daemon \
+            --stacktrace
+
+
+      # ==========================================
+      # 11. BUILD APK
       # ==========================================
       - name: Build BLAY Debug APK
         shell: bash
@@ -207,7 +282,7 @@ jobs:
 
 
       # ==========================================
-      # VERIFY APK
+      # 12. VERIFY APK
       # ==========================================
       - name: Verify APK
         shell: bash
@@ -216,11 +291,13 @@ jobs:
 
           APK="app/build/outputs/apk/debug/app-debug.apk"
 
+          echo "Checking generated APK..."
+
           if [ ! -f "$APK" ]; then
             echo "ERROR: APK tidak ditemukan."
 
             echo ""
-            echo "Build output:"
+            echo "Build directory:"
             find app/build -type f 2>/dev/null || true
 
             exit 1
@@ -235,7 +312,29 @@ jobs:
 
 
       # ==========================================
-      # UPLOAD APK
+      # 13. APK INFORMATION
+      # ==========================================
+      - name: APK information
+        shell: bash
+        run: |
+          set -e
+
+          APK="app/build/outputs/apk/debug/app-debug.apk"
+
+          echo "APK:"
+          echo "$APK"
+
+          echo ""
+          echo "Size:"
+          du -h "$APK"
+
+          echo ""
+          echo "SHA256:"
+          sha256sum "$APK"
+
+
+      # ==========================================
+      # 14. UPLOAD APK
       # ==========================================
       - name: Upload BLAY 2.0 APK
         uses: actions/upload-artifact@v4
