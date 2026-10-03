@@ -1,4 +1,4 @@
-name: Build BLAY 2.2
+name: Build BLAY 2.3
 
 on:
   workflow_dispatch:
@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   build:
-    name: Build BLAY 2.2 APK
+    name: Build BLAY 2.3 APK
     runs-on: ubuntu-24.04
     timeout-minutes: 25
 
@@ -37,7 +37,7 @@ jobs:
           set -e
 
           echo "================================"
-          echo "MENCARI PROJECT BLAY 2.2"
+          echo "   PREPARING BLAY 2.3"
           echo "================================"
 
           if [ -f "settings.gradle.kts" ] && \
@@ -54,14 +54,11 @@ jobs:
 
             if [ -z "$ZIP" ]; then
               echo "ERROR: ZIP BLAY tidak ditemukan."
-              echo ""
-              echo "Isi repository:"
               find . -maxdepth 3 -type f | sort
               exit 1
             fi
 
-            echo "ZIP ditemukan:"
-            echo "$ZIP"
+            echo "ZIP: $ZIP"
 
             rm -rf .blay-source
             mkdir -p .blay-source
@@ -81,7 +78,7 @@ jobs:
             fi
 
             if [ -z "$SETTINGS" ]; then
-              echo "ERROR: settings.gradle tidak ditemukan."
+              echo "ERROR: Gradle settings tidak ditemukan."
               find .blay-source -type f | sort
               exit 1
             fi
@@ -92,22 +89,14 @@ jobs:
             echo "$PROJECT_ROOT"
 
             cp -a "$PROJECT_ROOT"/. .
-
           fi
 
-          echo ""
-          echo "================================"
-          echo "SOURCE BLAY SIAP"
-          echo "================================"
-
-          find app/src/main -type f | sort
-
-      - name: Verify Android project
+      - name: Verify BLAY project
         shell: bash
         run: |
           set -e
 
-          echo "Memeriksa project BLAY..."
+          echo "Checking project..."
 
           test -f "settings.gradle.kts" \
             || test -f "settings.gradle"
@@ -124,31 +113,33 @@ jobs:
 
           test -f "app/src/main/java/com/blay/assistant/BlayStandbyService.java"
 
-          echo ""
-          echo "BLAY 2.2 PROJECT OK"
+          echo "BLAY 2.3 PROJECT OK"
 
-      - name: Show Gradle
-        shell: bash
-        run: |
-          gradle --version
-
-      - name: Clean
-        shell: bash
-        run: |
-          set -e
-          gradle clean --no-daemon --stacktrace
-
-      - name: Build BLAY 2.2
+      - name: Check signing key
         shell: bash
         run: |
           set -e
 
-          echo ""
+          echo "Checking stable BLAY signing key..."
+
+          if [ ! -f "blay-debug.keystore" ]; then
+            echo "ERROR: blay-debug.keystore tidak ditemukan!"
+            echo "Signing key harus dipertahankan agar update tidak bentrok."
+            exit 1
+          fi
+
+          ls -lh blay-debug.keystore
+
+      - name: Build BLAY 2.3
+        shell: bash
+        run: |
+          set -e
+
           echo "========================================"
-          echo "       BUILD BLAY 2.2 DEBUG APK"
+          echo "       BUILD BLAY 2.3 APK"
           echo "========================================"
 
-          gradle assembleDebug \
+          gradle clean assembleDebug \
             --no-daemon \
             --stacktrace \
             --warning-mode all
@@ -170,9 +161,8 @@ jobs:
             exit 1
           fi
 
-          echo ""
           echo "========================================"
-          echo "       BLAY 2.2 BERHASIL DIBUILD"
+          echo "       BLAY 2.3 BUILD BERHASIL"
           echo "========================================"
 
           ls -lh "$APK"
@@ -181,9 +171,9 @@ jobs:
           echo "SHA256:"
           sha256sum "$APK"
 
-      - name: Upload BLAY 2.2 APK
+      - name: Upload BLAY 2.3 APK
         uses: actions/upload-artifact@v4
         with:
-          name: BLAY-2.2-debug-apk
+          name: BLAY-2.3-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
