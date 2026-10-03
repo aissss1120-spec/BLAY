@@ -1,4 +1,4 @@
-name: Build BLAY 2.1
+name: Build BLAY 2.2
 
 on:
   workflow_dispatch:
@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   build:
-    name: Build BLAY 2.1 APK
+    name: Build BLAY 2.2 APK
     runs-on: ubuntu-24.04
     timeout-minutes: 25
 
@@ -26,7 +26,7 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Setup Gradle
+      - name: Setup Gradle 8.9
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.9"
@@ -37,15 +37,19 @@ jobs:
           set -e
 
           echo "================================"
-          echo "MENCARI PROJECT BLAY"
+          echo "MENCARI PROJECT BLAY 2.2"
           echo "================================"
 
-          if [ -f "settings.gradle.kts" ] && [ -f "app/build.gradle.kts" ]; then
+          if [ -f "settings.gradle.kts" ] && \
+             [ -f "app/build.gradle.kts" ]; then
+
             echo "Project ditemukan di root."
+
           else
+
             ZIP=$(find . -maxdepth 2 -type f \
               \( -name "*.zip" -o -name "*.ZIP" \) \
-              | grep -E "BLAY|blay" \
+              | grep -Ei "BLAY|blay" \
               | head -n 1 || true)
 
             if [ -z "$ZIP" ]; then
@@ -56,7 +60,8 @@ jobs:
               exit 1
             fi
 
-            echo "ZIP ditemukan: $ZIP"
+            echo "ZIP ditemukan:"
+            echo "$ZIP"
 
             rm -rf .blay-source
             mkdir -p .blay-source
@@ -76,7 +81,7 @@ jobs:
             fi
 
             if [ -z "$SETTINGS" ]; then
-              echo "ERROR: settings.gradle(.kts) tidak ditemukan."
+              echo "ERROR: settings.gradle tidak ditemukan."
               find .blay-source -type f | sort
               exit 1
             fi
@@ -87,23 +92,22 @@ jobs:
             echo "$PROJECT_ROOT"
 
             cp -a "$PROJECT_ROOT"/. .
+
           fi
 
           echo ""
           echo "================================"
-          echo "FILE PROJECT"
+          echo "SOURCE BLAY SIAP"
           echo "================================"
 
-          find . -maxdepth 4 -type f \
-            | grep -v ".git/" \
-            | sort
+          find app/src/main -type f | sort
 
       - name: Verify Android project
         shell: bash
         run: |
           set -e
 
-          echo "Checking BLAY..."
+          echo "Memeriksa project BLAY..."
 
           test -f "settings.gradle.kts" \
             || test -f "settings.gradle"
@@ -116,10 +120,14 @@ jobs:
 
           test -f "app/src/main/AndroidManifest.xml"
 
-          echo ""
-          echo "BLAY PROJECT OK"
+          test -f "app/src/main/java/com/blay/assistant/MainActivity.java"
 
-      - name: Show Gradle version
+          test -f "app/src/main/java/com/blay/assistant/BlayStandbyService.java"
+
+          echo ""
+          echo "BLAY 2.2 PROJECT OK"
+
+      - name: Show Gradle
         shell: bash
         run: |
           gradle --version
@@ -130,31 +138,20 @@ jobs:
           set -e
           gradle clean --no-daemon --stacktrace
 
-      - name: Build BLAY APK
+      - name: Build BLAY 2.2
         shell: bash
         run: |
           set -e
 
-          echo "================================"
-          echo "BUILD BLAY 2.1"
-          echo "================================"
+          echo ""
+          echo "========================================"
+          echo "       BUILD BLAY 2.2 DEBUG APK"
+          echo "========================================"
 
           gradle assembleDebug \
             --no-daemon \
             --stacktrace \
             --warning-mode all
-
-      - name: Find APK
-        shell: bash
-        run: |
-          set -e
-
-          echo "APK hasil build:"
-
-          find app/build/outputs \
-            -type f \
-            \( -name "*.apk" -o -name "*.aab" \) \
-            -exec ls -lh {} \;
 
       - name: Verify APK
         shell: bash
@@ -173,16 +170,20 @@ jobs:
             exit 1
           fi
 
-          echo "================================"
-          echo "BLAY APK BERHASIL"
-          echo "================================"
+          echo ""
+          echo "========================================"
+          echo "       BLAY 2.2 BERHASIL DIBUILD"
+          echo "========================================"
 
           ls -lh "$APK"
+
+          echo ""
+          echo "SHA256:"
           sha256sum "$APK"
 
-      - name: Upload APK
+      - name: Upload BLAY 2.2 APK
         uses: actions/upload-artifact@v4
         with:
-          name: BLAY-2.1-debug-apk
+          name: BLAY-2.2-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
